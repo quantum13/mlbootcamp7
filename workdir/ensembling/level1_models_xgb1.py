@@ -15,8 +15,8 @@ from workdir.classes.models import qm
 
 
 if __name__ == "__main__":
-    CV_SCORE_TO_STOP = 0.5413
-    DATAS = [6]
+    CV_SCORE_TO_STOP = 0.565
+    DATAS = [25]
 
     EVALS_ROUNDS = 100000
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
             QXgb(
                 booster='gbtree',
                 objective='binary:logistic',
-                eval_metric='logloss',
+                eval_metric='auc',
                 subsample=params['subsample'],
                 colsample_bytree=params['colsample_bytree'],
                 colsample_bylevel=params['colsample_bylevel'],
@@ -55,17 +55,17 @@ if __name__ == "__main__":
             ),
             'hyperopt xgb'
         )
-        res = cv.cross_val(model_id, data_id, seed=1000, early_stop_cv=lambda x: x>CV_SCORE_TO_STOP)
+        res = cv.cross_val(model_id, data_id, seed=1000, early_stop_cv=lambda x: x<CV_SCORE_TO_STOP)
         res = np.float64(res)
         res_arr = [res]
-        if res < CV_SCORE_TO_STOP:
+        if res > CV_SCORE_TO_STOP:
             for i in range(7):
                 res = cv.cross_val(model_id, data_id, seed=1001 + i, force=True)
                 res = np.float64(res)
                 res_arr.append(res)
 
         print(data_id, model_id, "{}/{}".format(counter, rounds), res_arr, datetime.datetime.now(),  params)
-        return np.mean(res_arr)
+        return -np.mean(res_arr)
     space = {
         'subsample': hp.quniform('subsample', 4, 10, 1),
         'colsample_bytree': hp.quniform('colsample_bytree', 4, 10, 1),

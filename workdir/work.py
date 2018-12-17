@@ -8,68 +8,20 @@ from sklearn.neighbors import KNeighborsClassifier
 import workdir.classes.config # loads local config
 from qml.cv import QCV
 from qml.helpers import get_engine
-from qml.models import QXgb, QAvg, QRankedAvg, QStackModel, QPostProcessingModel, QRankedByLineAvg
+from qml.models import QXgb, QAvg, QRankedAvg, QStackModel, QPostProcessingModel, QRankedByLineAvg, QAvgOneModelData
 from workdir.classes.models import qm
-
-# 1: origin
-# 2: 1 +  *2
-# 3: 1 +  *3
-# 4: 1 +  normalize
-# 5: 4 +  *2
-# 6: 1 +  */+2
-# 7: 1 +  */+-2
-# 8: 7 +  claster3
-# 9: 7 +  claster5
-#10: 7 + impot
-#11: 9 + impot
-#12: 10 + clast3
-#13: 10 + clast4
-
-# results = list([[2014, x] for x in range(1, 14)])
-# cv = QCV(qm)
-#
-#
-# for i in range(2000):
-#     random.shuffle(results)
-#     models = list(results[:random.randint(2, 7)])
-#     models = sorted(models, key=lambda x: (x[0], x[1]))
-#     print(models)
-#
-#     model_id = qm.add_by_params(
-#         QAvg(models)
-#     )
-#     print(cv.cross_val(model_id, 1))
-#     model_id = qm.add_by_params(
-#         QAvg(models, is_geom=True)
-#     )
-#     print(cv.cross_val(model_id, 1))
-#     model_id = qm.add_by_params(
-#         QRankedAvg(models)
-#     )
-#     print(cv.cross_val(model_id, 1))
-#     model_id = qm.add_by_params(
-#         QRankedByLineAvg(models)
-#     )
-#     print(cv.cross_val(model_id, 1))
 
 
 
 cv = QCV(qm)
+# print(cv.cross_val(416, 2))
+# print(cv.cross_val(416, 3))
+# print(cv.cross_val(416, 5))
+# print(cv.cross_val(416, 6))
+qm.qpredict(465, 24)
 
-def to1(X, res):
-    ind1 = X[X['numberOfDaysActuallyPlayed'] >= 14].index.values
-    for i in ind1:
-        res.set_value(i, 'res', 1)
-
-    return list(res['res'])
-
-
-qm.add(
-    37,
-    QPostProcessingModel(
-        2014, 8, to1
-    ),
-    'days14 to res 1'
-)
-
-qm.qpredict(37, 1, force=False)
+# for model_id in [416,450]: # 416
+#     for data_id in [13,15]:
+#         new_model_id = qm.add_by_params(QAvgOneModelData(model_id, 4), level=-2)
+#         print('##', model_id, data_id, new_model_id)
+#         print(cv.cross_val(new_model_id, data_id))

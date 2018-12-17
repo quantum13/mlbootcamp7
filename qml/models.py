@@ -1,15 +1,16 @@
+import hashlib
 import inspect
 import json
 from collections import OrderedDict
 from pathlib import Path
-import random
 
-import pandas as pd
-import hashlib
 import numpy as np
-from keras.utils import np_utils
-from scipy.stats.mstats import gmean
+import pandas as pd
 import xgboost as xgb
+from keras.layers import Dense, Dropout
+from keras.layers.normalization import BatchNormalization
+from keras.models import Sequential
+from scipy.stats.mstats import gmean
 from sklearn import model_selection
 from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.linear_model import LogisticRegression, Ridge, RidgeClassifier
@@ -17,14 +18,9 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
-from qml.cv import QCV
-from qml.helpers import get_engine, save
 from qml.config import *
+from qml.helpers import get_engine, save
 
-
-from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout
-from keras.layers.normalization import BatchNormalization
 
 class QModels:
 
@@ -187,13 +183,12 @@ class QModels:
         if res:
             return res['model_id']
         else:
-            conn.execute(
+            model_id = conn.execute(
                 """
-                    insert into qml_models (model_id, cls, params, descr, predict_fn, level) values
-                    (null, '{}', '{}', '{}', '{}', {})
+                    insert into qml_models (cls, params, descr, predict_fn, "level") values
+                    ('{}', '{}', '{}', '{}', {}) returning model_id
                 """.format(cls, description_params, description, predict_fn, level),
-            )
-        model_id=conn.execute('SELECT LAST_INSERT_ID() AS id').fetchone()[0]
+            ).fetchone()[0]
         self.models[model_id] = model
         model.qml_descr = description
         model.qml_predict_fn = predict_fn

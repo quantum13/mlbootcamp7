@@ -28,14 +28,14 @@ class QCV:
         self.X_train_cache = {}
         self.Y_train_cache = {}
 
-
-    def features_sel_del(self, model_id, data_id, early_stop_cv=None, exclude=None, splits=None, log_file=None):
+    def features_sel_del(self, model_id, data_id,
+            early_stop_cv=None, exclude=None, splits=None, log_file=None, columns=None):
+        """columns - sorted by score if dropped from pref iteration"""
         if log_file is not None:
             logging.basicConfig(filename=log_file, level=logging.INFO)
             log = lambda x: logging.info(x)
         else:
             log = lambda x: print(x)
-
 
         if exclude is None:
             exclude = []
@@ -51,16 +51,30 @@ class QCV:
 
         results = []
 
+        cols_to_check = columns if columns else X.columns
 
-        for col in set(X.columns) - set(exclude):
+        for col in cols_to_check:
+            if col in exclude: continue
+
             X_curr = X.drop(labels=[col]+exclude, axis=1)
 
             total_score = self._features_sel_cv(X_curr, Y, splits, model_id, data_id, log, early_stop_cv)
             results.append([total_score, col])
             log("{0:0=3d}\t{1}\t{2}".format(len(exclude)+1, total_score, col))
 
+            results = sorted(results, key=lambda x: x[0], reverse=True)  # minmax
+
+            if columns and len(results)>len(X.columns)//3:  # in first iter all cols
+                max_score = max([i[0] for i in results[:len(X.columns)//3]])
+                if total_score < max_score:  # minmax
+                    break
+
         if set(X.columns) != set(exclude + [results[0][1]]):
-            self.features_sel_del(model_id, [X, Y], early_stop_cv, exclude + [results[0][1]], splits, log_file=log_file)
+            self.features_sel_del(
+                model_id, [X, Y], early_stop_cv,
+                exclude + [results[0][1]], splits, log_file=log_file,
+                columns=[r[1] for r in results]
+            )
 
 
     def features_sel_add(self, model_id, data_id, initial_cols, cols_to_add,  early_stop_cv=None, splits=None, log_file=None):
@@ -130,7 +144,8 @@ class QCV:
         for train_indexes, test_indexes in splits:
             splits_new_order_temp += [[train_indexes, test_indexes]]
 
-        splists_new_order = [splits_new_order_temp[2], splits_new_order_temp[1], splits_new_order_temp[3], splits_new_order_temp[0], splits_new_order_temp[4]]
+        splists_new_order = [splits_new_order_temp[0], splits_new_order_temp[3], splits_new_order_temp[2], splits_new_order_temp[4], splits_new_order_temp[1]]
+        #splists_new_order = splits_new_order_temp
 
         scores = []
         i = 0
@@ -143,7 +158,9 @@ class QCV:
             res = self.qm.qpredict(model_id, data_id, data=(X_train, Y_train, X_test), Y_test=Y_test, force=True,
                                    save_result=False)
 
-            score = log_loss(Y_test, res.astype(np.float64), eps=1e-14)
+            #score = log_loss(Y_test, res.astype(np.float64))
+            fpr, tpr, thresholds = roc_curve(Y_test, res)
+            score = auc(fpr, tpr)
             log('   {} {}'.format(i, score))
             sys.stdout.flush()
             scores.append(score)
@@ -214,20 +231,20 @@ class QCV:
                 res = self.qm.qpredict(model_id, data_id, ids=[X_train, X_test], force=force, seed=seed)
 
 
-            # fpr, tpr, thresholds = roc_curve(Y_test, res)
-            # score = auc(fpr, tpr)
-            score = log_loss(Y_test, res.astype(np.float64), eps=1e-14)
+            fpr, tpr, thresholds = roc_curve(Y_test, res)
+            score = auc(fpr, tpr)
+            #score = log_loss(Y_test, res.astype(np.float64), eps=1e-14)
             print('   ', i, score)
             sys.stdout.flush()
             scores.append(score)
 
             self.conn.execute(
-                """insert into
-                        qml_results_statistic
-                    set
-                        cv_score={0}, data_id={1}, model_id={2}, fold={3}, seed={4}
-                    on duplicate key update
-                        cv_score = values(cv_score)
+                """
+                    INSERT INTO qml_results_statistic 
+                        (cv_score, data_id, model_id, fold, seed) 
+                    VALUES ({0}, {1}, {2}, {3}, {4})
+                    ON CONFLICT (data_id,model_id,fold,seed) DO UPDATE 
+                      SET cv_score = excluded.cv_score
                 """.format(
                     round(score, 10), data_id, model_id, i, seed
                 )
@@ -243,13 +260,13 @@ class QCV:
         total_time = time.time() - start_time
 
         self.conn.execute(
-            """insert into
-                    qml_results
-                set
-                    cv_score={0}, cv_time={1}, data_id={2}, model_id={3}
-                on duplicate key update
-                    cv_score = values(cv_score),
-                    cv_time = values(cv_time)
+            """
+                INSERT INTO qml_results 
+                    (cv_score, cv_time, data_id, model_id) 
+                VALUES ({0}, {1}, {2}, {3})
+                ON CONFLICT (data_id,model_id) DO UPDATE 
+                  SET cv_score = excluded.cv_score,
+                  cv_time = excluded.cv_time
             """.format(
                 round(total_score, 10), round(total_time, 1), data_id, model_id
             )
